@@ -41,25 +41,16 @@ if uploaded_file is not None:
                 "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. Minimal changes."
             )
             
-            # --- THE FINAL FIX: THE GEMINI FILE API ---
-            # 1. Convert to RGB and slightly resize it to process lightning fast
-            rgb_image = page_image.convert('RGB')
-            rgb_image.thumbnail((1600, 1600)) # Keeps text crisp but shrinks the file size
+            # --- THE CLEANEST, NATIVE METHOD ---
+            # 1. Convert to standard RGB (strips away PDF transparency that causes API crashes)
+            # 2. Resize it slightly to keep the inline payload lightweight and lightning fast
+            clean_image = page_image.convert('RGB')
+            clean_image.thumbnail((1600, 1600)) 
             
-            # 2. Save it to a temporary file on the Streamlit cloud server
-            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_file:
-                rgb_image.save(temp_file.name, format="JPEG", quality=85)
-                temp_path = temp_file.name
-                
-            # 3. Upload to Google's robust File API (bypasses all chat size limits)
-            uploaded_gemini_file = genai.upload_file(temp_path)
-            
-            # 4. Generate content using the uploaded file reference instead of raw bytes
-            response = model.generate_content([prompt, uploaded_gemini_file])
-            
-            # 5. Clean up: Delete the temp file from Streamlit to save memory
-            os.remove(temp_path)
-            # ------------------------------------------
+            # 3. Pass the clean PIL Image object directly to the model! 
+            # The Google SDK handles all the byte conversion automatically in the background.
+            response = model.generate_content([prompt, clean_image])
+            # -----------------------------------
             
             # Append this page's transcription
             full_transcription += f"\n\n## Page {page_number}\n"
