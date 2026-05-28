@@ -1,3 +1,6 @@
+import base64
+import io
+from PIL import Image
 from langchain_core.messages import HumanMessage
 import streamlit as st
 from pdf2image import convert_from_bytes
@@ -36,17 +39,23 @@ if uploaded_file is not None:
                 "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. Minimal changes."
             )
             
-            # --- FIXED STRUCTURE FOR MULTIMODAL INPUT ---
+            # --- CONVERT PIL IMAGE TO BASE64 STRING ---
+            buffered = io.BytesIO()
+            page_image.save(buffered, format="JPEG")
+            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            data_url = f"data:image/jpeg;base64,{img_str}"
+            # ------------------------------------------
+            
+            # Formulate the payload with the valid Data URL string
             message = HumanMessage(
                 content=[
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": page_image}  # LangChain handles the PIL image here automatically
+                    {"type": "image_url", "image_url": data_url} 
                 ]
             )
             
-            # Send the properly formatted message to the LLM
+            # Send the message to the LLM
             response = llm.invoke([message])
-            # ---------------------------------------------
             
             # Append this page's transcription to our master file string
             full_transcription += f"\n\n## Page {page_number}\n"
