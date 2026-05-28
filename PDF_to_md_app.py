@@ -46,13 +46,17 @@ if uploaded_file is not None:
             data_url = f"data:image/jpeg;base64,{img_str}"
             # ------------------------------------------
             
-            # Formulate the payload with the valid Data URL string
+            # --- FIXED STRUCTURE WITH NESTED "url" KEY ---
             message = HumanMessage(
                 content=[
                     {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": data_url} 
+                    {
+                        "type": "image_url", 
+                        "image_url": {"url": data_url}  # Wrapped inside a nested "url" key
+                    } 
                 ]
             )
+            # ---------------------------------------------
             
             # Send the message to the LLM
             response = llm.invoke([message])
