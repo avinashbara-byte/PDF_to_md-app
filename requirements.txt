@@ -1,0 +1,4 @@
+streamlit
+pdf2image
+langchain-google-genai
+pillow
