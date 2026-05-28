@@ -1,15 +1,16 @@
-import base64
-import io
-from PIL import Image
-from langchain_core.messages import HumanMessage
 import streamlit as st
 from pdf2image import convert_from_bytes
-from langchain_google_genai import ChatGoogleGenerativeAI
+import google.generativeai as genai
 import os
+from PIL import Image
+import io
 
-# Set API Key
-os.environ["GOOGLE_API_KEY"] = "your_gemini_api_key_here"
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash")
+# 1. Setup the Native Google SDK (Bypassing LangChain completely)
+os.environ["GOOGLE_API_KEY"] = "your_gemini_api_key_here" 
+genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+
+# Initialize the model directly
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 st.title("📝 Multi-Page Handwritten Notes to Markdown")
 st.write("Upload a multi-page PDF to clean up and convert all pages.")
@@ -17,18 +18,18 @@ st.write("Upload a multi-page PDF to clean up and convert all pages.")
 uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
 if uploaded_file is not None:
-    # Use Streamlit's session state so it doesn't re-run on every user click
+    # Use Streamlit's session state
     if "transcription" not in st.session_state:
         st.info("Processing handwriting across all pages... Please wait.")
         
-        # 1. Convert the entire PDF into a list of images (one per page)
+        # Convert the PDF into a list of PIL Images
         images = convert_from_bytes(uploaded_file.read())
         total_pages = len(images)
         st.write(f"Found {total_pages} page(s). Processing...")
 
         full_transcription = ""
         
-        # 2. Loop through every single page image
+        # Loop through every single page image
         for index, page_image in enumerate(images):
             page_number = index + 1
             st.write(f"Analyzing Page {page_number} of {total_pages}...")
@@ -39,50 +40,31 @@ if uploaded_file is not None:
                 "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. Minimal changes."
             )
             
-            # --- CONVERT PIL IMAGE TO BASE64 STRING ---
-            buffered = io.BytesIO()
-            page_image.save(buffered, format="JPEG")
-            img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
-            data_url = f"data:image/jpeg;base64,{img_str}"
-            # ------------------------------------------
+            # --- THE NATIVE GOOGLE SDK METHOD ---
+            # The native SDK accepts raw PIL images perfectly without base64 hacking!
+            response = model.generate_content([prompt, page_image])
+            # ------------------------------------
             
-            # --- GOOGLE-SPECIFIC LANGCHAIN MULTIMODAL DICTIONARY SCHEMA ---
-            message = HumanMessage(
-                content=[
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image",               # Use "image", NOT "image_url"
-                        "url": data_url                # Key name is "url", passing the base64 string directly
-                    }
-                ]
-            )
-            # -------------------------------------------------------------
-            
-            # Send the formatted message to the LLM
-            response = llm.invoke([message])
-            
-            # Append this page's transcription to our master file string
+            # Append this page's transcription
             full_transcription += f"\n\n## Page {page_number}\n"
-            full_transcription += response.content
-            
-        # Save the combined text to the session state
+            full_transcription += response.text # Note: Native SDK uses .text instead of .content
+
+        # Save combined text to session state
         st.session_state.transcription = full_transcription
 
-        # 3. Generate a summary for the *entire* document
+        # Generate the summary
         meta_prompt = (
             "Based on this complete multi-page transcription, write a 2-sentence summary "
             f"and suggest 1 clean filename:\n{st.session_state.transcription}"
         )
-        # Just pass the text string directly here, do not wrap it inside an object array
-        meta_res = llm.invoke(meta_prompt) 
-        st.session_state.summary = meta_res.content
+        meta_res = model.generate_content(meta_prompt)
+        st.session_state.summary = meta_res.text
 
     # --- UI DISPLAY ---
     st.subheader("📋 Overall Summary")
     st.write(st.session_state.summary)
 
     st.subheader("✍️ Combined Markdown Content")
-    # Using text_area so you can scroll through the entire transcribed document easily
     st.text_area("Review Transcription", st.session_state.transcription, height=300)
 
     # Filename & Save Button
