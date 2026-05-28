@@ -40,15 +40,28 @@ if uploaded_file is not None:
                 "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. Minimal changes."
             )
             
-            # --- THE NATIVE GOOGLE SDK METHOD ---
-            # The native SDK accepts raw PIL images perfectly without base64 hacking!
-            response = model.generate_content([prompt, page_image])
-            # ------------------------------------
+            # --- THE FIX: SHRINK AND FORMAT THE IMAGE ---
+            # 1. Convert to standard RGB (removes transparency layers that cause API crashes)
+            rgb_image = page_image.convert('RGB')
+            
+            # 2. Compress the image into a JPEG in-memory buffer
+            img_byte_arr = io.BytesIO()
+            rgb_image.save(img_byte_arr, format='JPEG', quality=85)
+            
+            # 3. Create an explicit Google SDK image part payload
+            image_payload = {
+                "mime_type": "image/jpeg",
+                "data": img_byte_arr.getvalue()
+            }
+            # --------------------------------------------
+            
+            # Pass the prompt and the explicitly formatted image payload
+            response = model.generate_content([prompt, image_payload])
             
             # Append this page's transcription
             full_transcription += f"\n\n## Page {page_number}\n"
-            full_transcription += response.text # Note: Native SDK uses .text instead of .content
-
+            full_transcription += response.text
+            
         # Save combined text to session state
         st.session_state.transcription = full_transcription
 
