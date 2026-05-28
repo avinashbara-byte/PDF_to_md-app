@@ -46,25 +46,25 @@ if uploaded_file is not None:
             data_url = f"data:image/jpeg;base64,{img_str}"
             # ------------------------------------------
             
-            # --- THE ABSOLUTE FIX: GOOGLE NATIVE LANGCHAIN FORMAT ---
+            # --- GOOGLE-SPECIFIC LANGCHAIN MULTIMODAL DICTIONARY SCHEMA ---
             message = HumanMessage(
                 content=[
                     {"type": "text", "text": prompt},
                     {
-                        "type": "image_url", 
-                        "image_url": f"data:image/jpeg;base64,{img_str}" # NO NESTED DICTIONARY! Just pass the data string directly.
-                    } 
+                        "type": "image",               # Use "image", NOT "image_url"
+                        "url": data_url                # Key name is "url", passing the base64 string directly
+                    }
                 ]
             )
-            # --------------------------------------------------------
+            # -------------------------------------------------------------
             
-            # Send the message to the LLM
+            # Send the formatted message to the LLM
             response = llm.invoke([message])
             
             # Append this page's transcription to our master file string
             full_transcription += f"\n\n## Page {page_number}\n"
             full_transcription += response.content
-
+            
         # Save the combined text to the session state
         st.session_state.transcription = full_transcription
 
