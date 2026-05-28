@@ -1,3 +1,4 @@
+from langchain_core.messages import HumanMessage
 import streamlit as st
 from pdf2image import convert_from_bytes
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -35,8 +36,17 @@ if uploaded_file is not None:
                 "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. Minimal changes."
             )
             
-            # Send the specific page image to the LLM
-            response = llm.invoke([prompt, page_image])
+            # --- FIXED STRUCTURE FOR MULTIMODAL INPUT ---
+            message = HumanMessage(
+                content=[
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": page_image}  # LangChain handles the PIL image here automatically
+                ]
+            )
+            
+            # Send the properly formatted message to the LLM
+            response = llm.invoke([message])
+            # ---------------------------------------------
             
             # Append this page's transcription to our master file string
             full_transcription += f"\n\n## Page {page_number}\n"
