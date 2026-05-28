@@ -1,17 +1,13 @@
-import tempfile
 import streamlit as st
 from pdf2image import convert_from_bytes
 import google.generativeai as genai
-import os
-from PIL import Image
-import io
 
-# 1. Setup the Native Google SDK (Bypassing LangChain completely)
-os.environ["GOOGLE_API_KEY"] = "your_gemini_api_key_here" 
-genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+# 1. Setup the Native Google SDK (Securely via Streamlit Secrets)
+api_key = st.secrets["GOOGLE_API_KEY"]
+genai.configure(api_key=api_key)
 
 # Initialize the model directly
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 st.title("📝 Multi-Page Handwritten Notes to Markdown")
 st.write("Upload a multi-page PDF to clean up and convert all pages.")
@@ -54,7 +50,7 @@ if uploaded_file is not None:
             
             # Append this page's transcription
             full_transcription += f"\n\n## Page {page_number}\n"
-            full_transcription += response.text
+            full_transcription += response.text 
             
         # Save combined text to session state
         st.session_state.transcription = full_transcription
