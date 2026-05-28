@@ -1,3 +1,4 @@
+import tempfile
 import streamlit as st
 from pdf2image import convert_from_bytes
 import google.generativeai as genai
@@ -40,23 +41,25 @@ if uploaded_file is not None:
                 "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. Minimal changes."
             )
             
-            # --- THE FIX: SHRINK AND FORMAT THE IMAGE ---
-            # 1. Convert to standard RGB (removes transparency layers that cause API crashes)
+            # --- THE FINAL FIX: THE GEMINI FILE API ---
+            # 1. Convert to RGB and slightly resize it to process lightning fast
             rgb_image = page_image.convert('RGB')
+            rgb_image.thumbnail((1600, 1600)) # Keeps text crisp but shrinks the file size
             
-            # 2. Compress the image into a JPEG in-memory buffer
-            img_byte_arr = io.BytesIO()
-            rgb_image.save(img_byte_arr, format='JPEG', quality=85)
+            # 2. Save it to a temporary file on the Streamlit cloud server
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_file:
+                rgb_image.save(temp_file.name, format="JPEG", quality=85)
+                temp_path = temp_file.name
+                
+            # 3. Upload to Google's robust File API (bypasses all chat size limits)
+            uploaded_gemini_file = genai.upload_file(temp_path)
             
-            # 3. Create an explicit Google SDK image part payload
-            image_payload = {
-                "mime_type": "image/jpeg",
-                "data": img_byte_arr.getvalue()
-            }
-            # --------------------------------------------
+            # 4. Generate content using the uploaded file reference instead of raw bytes
+            response = model.generate_content([prompt, uploaded_gemini_file])
             
-            # Pass the prompt and the explicitly formatted image payload
-            response = model.generate_content([prompt, image_payload])
+            # 5. Clean up: Delete the temp file from Streamlit to save memory
+            os.remove(temp_path)
+            # ------------------------------------------
             
             # Append this page's transcription
             full_transcription += f"\n\n## Page {page_number}\n"
