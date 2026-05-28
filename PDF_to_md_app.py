@@ -1,13 +1,13 @@
 import streamlit as st
 from pdf2image import convert_from_bytes
-import google.generativeai as genai
+from google import genai
 
 # 1. Setup the Native Google SDK (Securely via Streamlit Secrets)
 api_key = st.secrets["GOOGLE_API_KEY"]
-genai.configure(api_key=api_key)
+client = genai.Client(api_key=api_key)
 
-# Initialize the model directly
-model = genai.GenerativeModel('gemini-1.5-flash')
+# 2. Define the correct, modern model
+MODEL_ID = 'gemini-2.5-flash'
 
 st.title("📝 Multi-Page Handwritten Notes to Markdown")
 st.write("Upload a multi-page PDF to clean up and convert all pages.")
@@ -37,16 +37,18 @@ if uploaded_file is not None:
                 "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. Minimal changes."
             )
             
-            # --- THE CLEANEST, NATIVE METHOD ---
-            # 1. Convert to standard RGB (strips away PDF transparency that causes API crashes)
-            # 2. Resize it slightly to keep the inline payload lightweight and lightning fast
+            # --- THE NEW SDK METHOD ---
+            # 1. Convert to standard RGB (strips away PDF transparency)
+            # 2. Resize it slightly for lightning-fast processing
             clean_image = page_image.convert('RGB')
             clean_image.thumbnail((1600, 1600)) 
             
-            # 3. Pass the clean PIL Image object directly to the model! 
-            # The Google SDK handles all the byte conversion automatically in the background.
-            response = model.generate_content([prompt, clean_image])
-            # -----------------------------------
+            # 3. Call the new client endpoint (It accepts PIL images directly!)
+            response = client.models.generate_content(
+                model=MODEL_ID,
+                contents=[prompt, clean_image]
+            )
+            # --------------------------
             
             # Append this page's transcription
             full_transcription += f"\n\n## Page {page_number}\n"
@@ -60,7 +62,10 @@ if uploaded_file is not None:
             "Based on this complete multi-page transcription, write a 2-sentence summary "
             f"and suggest 1 clean filename:\n{st.session_state.transcription}"
         )
-        meta_res = model.generate_content(meta_prompt)
+        meta_res = client.models.generate_content(
+            model=MODEL_ID,
+            contents=meta_prompt
+        )
         st.session_state.summary = meta_res.text
 
     # --- UI DISPLAY ---
