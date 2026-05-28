@@ -46,17 +46,17 @@ if uploaded_file is not None:
             data_url = f"data:image/jpeg;base64,{img_str}"
             # ------------------------------------------
             
-            # --- FIXED STRUCTURE WITH NESTED "url" KEY ---
+            # --- THE ABSOLUTE FIX: GOOGLE NATIVE LANGCHAIN FORMAT ---
             message = HumanMessage(
                 content=[
                     {"type": "text", "text": prompt},
                     {
                         "type": "image_url", 
-                        "image_url": {"url": data_url}  # Wrapped inside a nested "url" key
+                        "image_url": f"data:image/jpeg;base64,{img_str}" # NO NESTED DICTIONARY! Just pass the data string directly.
                     } 
                 ]
             )
-            # ---------------------------------------------
+            # --------------------------------------------------------
             
             # Send the message to the LLM
             response = llm.invoke([message])
@@ -73,7 +73,8 @@ if uploaded_file is not None:
             "Based on this complete multi-page transcription, write a 2-sentence summary "
             f"and suggest 1 clean filename:\n{st.session_state.transcription}"
         )
-        meta_res = llm.invoke(meta_prompt)
+        # Just pass the text string directly here, do not wrap it inside an object array
+        meta_res = llm.invoke(meta_prompt) 
         st.session_state.summary = meta_res.content
 
     # --- UI DISPLAY ---
