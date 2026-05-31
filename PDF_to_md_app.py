@@ -10,56 +10,56 @@ client = genai.Client(api_key=api_key)
 MODEL_ID = 'gemini-2.5-flash'
 
 st.title("📝 Multi-Page Handwritten Notes to Markdown")
-st.write("Upload a multi-page PDF to clean up and convert all pages.")
+st.write("Upload a multi-page PDF to clean up and convert all pages into a continuous document.")
 
 uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
 if uploaded_file is not None:
-    # Use Streamlit's session state
+    # Use Streamlit's session state to prevent reprocessing on every click
     if "transcription" not in st.session_state:
         st.info("Processing handwriting across all pages... Please wait.")
         
         # Convert the PDF into a list of PIL Images
         images = convert_from_bytes(uploaded_file.read())
         total_pages = len(images)
-        st.write(f"Found {total_pages} page(s). Processing...")
+        st.write(f"Found {total_pages} page(s). Preparing document...")
 
-        full_transcription = ""
+        # 1. Create a single master prompt instructing a seamless merge
+        prompt = (
+            "Analyze these sequential images of handwritten notes from a single document. "
+            "1. Transcribe the entire document seamlessly into one continuous Markdown file. "
+            "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. "
+            "3. Do NOT artificially separate the text by page number; make the text flow cohesively."
+        )
         
-        # Loop through every single page image
+        # 2. Start our payload list with the text prompt
+        payload = [prompt]
+        
+        # 3. Clean and optimize every page image, then bundle them into the payload stack
         for index, page_image in enumerate(images):
             page_number = index + 1
-            st.write(f"Analyzing Page {page_number} of {total_pages}...")
+            st.write(f"Scanning Page {page_number} of {total_pages}...")
             
-            prompt = (
-                f"Analyze this image of page {page_number} of handwritten notes. "
-                "1. Transcribe it directly into Markdown format. "
-                "2. Fix obvious spelling/grammar errors, but keep the original phrasing intact. Minimal changes."
-            )
-            
-            # --- THE NEW SDK METHOD ---
-            # 1. Convert to standard RGB (strips away PDF transparency)
-            # 2. Resize it slightly for lightning-fast processing
             clean_image = page_image.convert('RGB')
             clean_image.thumbnail((1600, 1600)) 
             
-            # 3. Call the new client endpoint (It accepts PIL images directly!)
-            response = client.models.generate_content(
-                model=MODEL_ID,
-                contents=[prompt, clean_image]
-            )
-            # --------------------------
+            payload.append(clean_image)
             
-            # Append this page's transcription
-            full_transcription += f"\n\n## Page {page_number}\n"
-            full_transcription += response.text 
-            
-        # Save combined text to session state
-        st.session_state.transcription = full_transcription
+        st.info("Sending full document to Gemini. Writing continuous file...")
 
-        # Generate the summary
+        # 4. Execute a single API call passing all components simultaneously
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=payload
+        )
+            
+        # Store the continuous response text to session state
+        st.session_state.transcription = response.text
+
+        # 5. Generate the document metadata summary
+        st.info("Generating summary...")
         meta_prompt = (
-            "Based on this complete multi-page transcription, write a 2-sentence summary "
+            "Based on this complete document transcription, write a 2-sentence summary "
             f"and suggest 1 clean filename:\n{st.session_state.transcription}"
         )
         meta_res = client.models.generate_content(
@@ -72,8 +72,8 @@ if uploaded_file is not None:
     st.subheader("📋 Overall Summary")
     st.write(st.session_state.summary)
 
-    st.subheader("✍️ Combined Markdown Content")
-    st.text_area("Review Transcription", st.session_state.transcription, height=300)
+    st.subheader("✍️ Combined Continuous Markdown Content")
+    st.text_area("Review Transcription", st.session_state.transcription, height=400)
 
     # Filename & Save Button
     custom_filename = st.text_input("Enter your desired filename (without .md):", value="My_Cleaned_Notes")
